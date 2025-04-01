@@ -1,6 +1,10 @@
 #include <gtest/gtest.h>
 #include <sstream>
 #include <list>
+#include <tuple>
+#ifndef __PRETTY_FUNCTION__
+#include "pretty.h"
+#endif
 #include "myallocator.h"
 #include "mycontainers.h"
 
@@ -11,7 +15,9 @@ int main(int argc, char **argv)
     return RUN_ALL_TESTS();
 }
 
+using namespace std::literals::string_literals;
 using otus_hw3::std_11_pool_allocator;
+using otus_hw3::std_11_pool_dealloc_allocator;
 using otus_hw3::MyList;
 
 TEST(test_std11, test_std_vec_resize)
@@ -150,3 +156,79 @@ TEST(test_std11, test_fact)
     EXPECT_EQ( fact(6), 720);
 
 }
+
+TEST(test_std11, test_std_map_dealloc)
+{
+    struct Val_t{ 
+        std::string nm_; double val_; 
+        ~Val_t() noexcept 
+        { 
+            std::cout << __PRETTY_FUNCTION__ << ": " << std::hex << this << std::endl; 
+        
+        }
+        Val_t() : val_{} {} 
+        Val_t(const std::string nm, const double v) : nm_(nm), val_{v} {} 
+    };
+    using Alloc_t = std_11_pool_dealloc_allocator<std::pair<const int, Val_t>, 10, 3>;
+    auto m = std::map<int, Val_t, std::less<int>, Alloc_t>{};
+    constexpr const int max_items = decltype(m)::allocator_type::size_;   
+    
+    try
+    {
+        for (int i = 0; i < max_items ; ++i)
+        {
+            m[i] = decltype(m)::mapped_type(""s, static_cast<const double>(i));
+        }
+        
+        for (int i = 0; i < max_items ; i += 2)
+        {
+            m.erase(i);
+        }
+    }
+    catch(std::bad_alloc& excp)
+    {
+        std::cerr << __PRETTY_FUNCTION__ << ", exception: " <<  excp.what() << std::endl;
+    }
+    EXPECT_EQ( m.size(), max_items/2 ); 
+}
+
+TEST(test_std11, test_std_vec_fragmented)
+{
+    struct Val_t{ 
+        std::string nm_; double val_; 
+        ~Val_t() noexcept 
+        { 
+            std::cout << __PRETTY_FUNCTION__ << ": " << std::hex << this << std::endl; 
+        
+        }
+        Val_t() : val_{} {} 
+        Val_t(const std::string nm, const double v) : nm_(nm), val_{v} {} 
+    };
+
+    using Alloc_t = std_11_pool_dealloc_allocator<Val_t, 10, 3>;
+    auto v = std::vector<Val_t, Alloc_t>{};
+    constexpr const int max_items = decltype(v)::allocator_type::size_;   
+    
+    try
+    {
+        v.reserve(max_items/2);
+        for (int i = 0; i < max_items ; ++i)
+        {
+            v.emplace_back( decltype(v)::value_type(""s, static_cast<const double>(i)) );
+        }
+
+        EXPECT_EQ( v.size(), max_items/2 ); 
+        
+        for (int i = 0; i < max_items ; i += 2)
+        {
+            v.erase(v.begin());
+        }
+    }
+    catch(std::bad_alloc& excp)
+    {
+        std::cerr << __PRETTY_FUNCTION__ << ", exception: " <<  excp.what() << std::endl;
+    }
+    EXPECT_EQ( v.size(), max_items/2); 
+}
+
+
